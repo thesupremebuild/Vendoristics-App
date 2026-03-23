@@ -1,0 +1,9 @@
+{
+  "name": "VENDORISTICS",
+  "description": "A comprehensive business management tool featuring accounting, task management, document storage, and multi-user access with role-based permissions.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

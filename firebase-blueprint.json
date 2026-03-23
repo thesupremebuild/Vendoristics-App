@@ -1,0 +1,198 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the application",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "staff"] },
+        "businessId": { "type": "string", "description": "ID of the business this user belongs to" }
+      },
+      "required": ["uid", "email", "role", "businessId"]
+    },
+    "Business": {
+      "title": "Business",
+      "description": "A business entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "trialEndsAt": { "type": "string", "format": "date-time" },
+        "subscriptionStatus": { "type": "string", "enum": ["trial", "active", "expired"] }
+      },
+      "required": ["id", "name", "ownerId", "createdAt", "trialEndsAt", "subscriptionStatus"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "amount": { "type": "number" },
+        "paidAmount": { "type": "number" },
+        "balanceAmount": { "type": "number" },
+        "type": { "type": "string", "enum": ["credit", "debit"] },
+        "category": { "type": "string", "enum": ["bill", "payment", "journal", "opening_balance"] },
+        "partyId": { "type": "string" },
+        "partyName": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["paid", "unpaid", "partial"] },
+        "businessId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["amount", "type", "date", "status", "businessId"]
+    },
+    "Party": {
+      "title": "Party",
+      "description": "A customer or vendor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["customer", "vendor"] },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "openingBalance": { "type": "number" },
+        "openingBalanceType": { "type": "string", "enum": ["receive", "pay"] },
+        "businessId": { "type": "string" },
+        "totalDue": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "type", "businessId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "A to-do task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "assignedTo": { "type": "string" },
+        "deadline": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "completed"] },
+        "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+        "businessId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "status", "priority", "businessId"]
+    },
+    "Document": {
+      "title": "Document",
+      "description": "A business document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "category": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "businessId": { "type": "string" }
+      },
+      "required": ["id", "name", "url", "businessId"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "A team member invitation",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["owner", "staff"] },
+        "businessId": { "type": "string" },
+        "businessName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted"] },
+        "invitedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role", "businessId", "status", "invitedBy", "createdAt"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "A billing invoice or quotation",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string" },
+        "partyId": { "type": "string" },
+        "partyName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "dueDate": { "type": "string", "format": "date" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "sent", "paid", "overdue"] },
+        "items": { "type": "array" },
+        "type": { "type": "string", "enum": ["invoice", "quotation"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["invoiceNumber", "partyId", "partyName", "date", "dueDate", "totalAmount", "status", "items"]
+    },
+    "SupportTicket": {
+      "title": "Support Ticket",
+      "description": "A support request from a user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "businessId": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "in-progress", "resolved"] },
+        "responses": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "userName", "userEmail", "businessId", "subject", "message", "status", "createdAt"]
+    },
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/invitations/{invitationId}": {
+      "schema": "Invitation",
+      "description": "Pending team invitations"
+    },
+    "/businesses/{businessId}": {
+      "schema": "Business",
+      "description": "Business details"
+    },
+    "/businesses/{businessId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Business transactions"
+    },
+    "/businesses/{businessId}/parties/{partyId}": {
+      "schema": "Party",
+      "description": "Customers and vendors"
+    },
+    "/businesses/{businessId}/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Business tasks"
+    },
+    "/businesses/{businessId}/documents/{documentId}": {
+      "schema": "Document",
+      "description": "Business documents"
+    },
+    "/businesses/{businessId}/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Business invoices"
+    },
+    "/businesses/{businessId}/quotations/{quotationId}": {
+      "schema": "Invoice",
+      "description": "Business quotations"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Support requests"
+    }
+  }
+}

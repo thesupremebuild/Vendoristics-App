@@ -1,0 +1,290 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}
+    // Fields:
+    //   - uid: string (required) - Firebase Auth UID
+    //   - email: string (required) - User email
+    //   - displayName: string (optional) - User display name
+    //   - role: string (required) - 'owner' or 'staff'
+    //   - businessId: string (required) - ID of the business
+    //
+    // Collection: /businesses/{businessId}
+    // Fields:
+    //   - id: string (required) - Business ID
+    //   - name: string (required) - Business name
+    //   - ownerId: string (required) - UID of the owner
+    //
+    // Collection: /businesses/{businessId}/transactions/{transactionId}
+    // Fields:
+    //   - amount: number (required) - Transaction amount
+    //   - type: string (required) - 'credit' or 'debit'
+    //   - partyId: string (required) - ID of the party
+    //   - partyName: string (required) - Name of the party
+    //   - status: string (required) - 'paid' or 'unpaid'
+    //   - date: string (required) - ISO date string
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "thesupremebuild@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+    
+    function isBusinessMember(businessId) {
+      return isAuthenticated() && (
+        (userExists() && getUserData().businessId == businessId) ||
+        (exists(/databases/$(database)/documents/businesses/$(businessId)) && 
+         get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid)
+      );
+    }
+    
+    function isBusinessOwner(businessId) {
+      return isAuthenticated() && (
+        (userExists() && getUserData().businessId == businessId && getUserData().role == 'owner') ||
+        (exists(/databases/$(database)/documents/businesses/$(businessId)) && 
+         get(/databases/$(database)/documents/businesses/$(businessId)).data.ownerId == request.auth.uid)
+      );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Domain Validators
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() > 0 && data.uid.size() < 128 &&
+             data.email is string && isValidEmail(data.email) && data.email.size() < 256 &&
+             data.role in ['owner', 'staff', 'admin'] &&
+             data.businessId is string && data.businessId.size() < 128 &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() < 500));
+    }
+
+    function isValidBusiness(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() < 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() < 128 &&
+             (!('createdAt' in data) || data.createdAt is string) &&
+             (!('trialEndsAt' in data) || data.trialEndsAt is string) &&
+             (!('subscriptionStatus' in data) || data.subscriptionStatus in ['trial', 'active', 'expired']);
+    }
+
+    function isValidTransaction(data) {
+      return data.amount is number && data.amount >= 0 && data.amount < 1000000000 &&
+             data.type in ['credit', 'debit'] &&
+             data.partyId is string && (data.partyId.size() > 0 || data.category == 'journal') &&
+             data.partyName is string && data.partyName.size() > 0 && data.partyName.size() < 100 &&
+             data.status in ['paid', 'unpaid', 'partial'] &&
+             data.date is string && data.date.size() < 50 &&
+             data.businessId is string && data.businessId.size() > 0 &&
+             (!('paidAmount' in data) || data.paidAmount is number) &&
+             (!('balanceAmount' in data) || data.balanceAmount is number) &&
+             (!('category' in data) || data.category in ['bill', 'payment', 'journal', 'opening_balance']) &&
+             (!('description' in data) || data.description is string) &&
+             (!('invoiceId' in data) || data.invoiceId is string) &&
+             (!('createdAt' in data) || data.createdAt is timestamp || data.createdAt is string) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp || data.updatedAt is string);
+    }
+
+    function isValidInvitation(data) {
+      return data.email is string && isValidEmail(data.email) &&
+             data.role in ['owner', 'staff'] &&
+             data.businessId is string && data.businessId.size() > 0 &&
+             data.status in ['pending', 'accepted'] &&
+             data.invitedBy is string &&
+             data.createdAt is string &&
+             (!('businessName' in data) || data.businessName is string);
+    }
+
+    function isValidInvoice(data) {
+      return data.invoiceNumber is string && data.invoiceNumber.size() > 0 &&
+             data.partyId is string && data.partyId.size() > 0 &&
+             data.partyName is string && data.partyName.size() > 0 &&
+             data.date is string &&
+             data.dueDate is string &&
+             data.totalAmount is number &&
+             data.status in ['draft', 'sent', 'paid', 'overdue'] &&
+             data.items is list &&
+             (!('type' in data) || data.type in ['invoice', 'quotation']) &&
+             (!('createdAt' in data) || data.createdAt is timestamp) &&
+             (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    function isValidInvoiceSettings(data) {
+      return data.companyName is string &&
+             data.address is string &&
+             data.phone is string &&
+             data.email is string &&
+             data.color is string &&
+             (!('gstin' in data) || data.gstin is string) &&
+             (!('logoUrl' in data) || data.logoUrl is string) &&
+             (!('footerText' in data) || data.footerText is string);
+    }
+
+    function isValidParty(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.type in ['customer', 'vendor'] &&
+             data.businessId is string && data.businessId.size() > 0 &&
+             (!('totalDue' in data) || data.totalDue is number) &&
+             (!('phone' in data) || data.phone is string) &&
+             (!('email' in data) || data.email is string) &&
+             (!('openingBalance' in data) || data.openingBalance is number) &&
+             (!('openingBalanceType' in data) || data.openingBalanceType in ['receive', 'pay']) &&
+             (!('createdAt' in data) || data.createdAt is string) &&
+             (!('updatedAt' in data) || data.updatedAt is string);
+    }
+
+    function isValidTask(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.status in ['pending', 'completed'] &&
+             data.priority in ['high', 'medium', 'low'] &&
+             data.businessId is string && data.businessId.size() > 0 &&
+             (!('description' in data) || data.description is string) &&
+             (!('assignedTo' in data) || data.assignedTo is string) &&
+             (!('deadline' in data) || data.deadline is string) &&
+             (!('createdAt' in data) || data.createdAt is string);
+    }
+
+    function isValidDocument(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.category is string &&
+             data.url is string &&
+             data.storagePath is string &&
+             data.businessId is string &&
+             (!('uploadedBy' in data) || data.uploadedBy is string) &&
+             (!('date' in data) || data.date is string) &&
+             (!('size' in data) || data.size is number) &&
+             (!('type' in data) || data.type is string);
+    }
+
+    function isValidSupportTicket(data) {
+      return data.userId is string &&
+             data.userName is string &&
+             data.userEmail is string &&
+             data.businessId is string &&
+             data.subject is string &&
+             data.message is string &&
+             data.status in ['open', 'in-progress', 'resolved'] &&
+             (!('createdAt' in data) || data.createdAt is string || data.createdAt is timestamp) &&
+             (!('responses' in data) || data.responses is list);
+    }
+
+    // User Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || (isAuthenticated() && userExists() && getUserData().businessId == resource.data.businessId);
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) && 
+                       isValidUser(request.resource.data) && 
+                       (request.resource.data.role == resource.data.role || isAdmin())) || 
+                       (isBusinessOwner(resource.data.businessId) && isValidUser(request.resource.data)) ||
+                       isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Invitation Rules
+    match /invitations/{invitationId} {
+      allow read: if isAuthenticated() && (request.auth.token.email.lower() == resource.data.email || isBusinessOwner(resource.data.businessId));
+      allow create: if isAuthenticated() && isBusinessOwner(request.resource.data.businessId) && isValidInvitation(request.resource.data);
+      allow update: if isAuthenticated() && (isBusinessOwner(resource.data.businessId) || request.auth.token.email.lower() == resource.data.email);
+      allow delete: if isAuthenticated() && (isBusinessOwner(resource.data.businessId) || request.auth.token.email.lower() == resource.data.email);
+    }
+
+    // Business Rules
+    match /businesses/{businessId} {
+      allow read: if (isAuthenticated() && resource.data.ownerId == request.auth.uid) || isBusinessMember(businessId) || isAdmin();
+      allow create: if isAuthenticated() && isValidBusiness(request.resource.data) && request.resource.data.ownerId == request.auth.uid;
+      allow update: if (isBusinessOwner(businessId) && isValidBusiness(request.resource.data)) || isAdmin();
+      allow delete: if isAdmin();
+
+      // Subcollections
+      match /transactions/{transactionId} {
+        allow read: if isBusinessMember(businessId) || isAdmin();
+        allow create: if isBusinessMember(businessId) && isValidTransaction(request.resource.data) && request.resource.data.businessId == businessId;
+        allow update: if (isBusinessMember(businessId) && isValidTransaction(request.resource.data) && request.resource.data.businessId == businessId) || isAdmin();
+        allow delete: if isBusinessOwner(businessId) || isAdmin();
+      }
+      
+      match /parties/{partyId} {
+        allow read: if isBusinessMember(businessId) || isAdmin();
+        allow create: if isBusinessMember(businessId) && isValidParty(request.resource.data) && request.resource.data.businessId == businessId;
+        allow update: if (isBusinessMember(businessId) && isValidParty(request.resource.data) && request.resource.data.businessId == businessId) || isAdmin();
+        allow delete: if isBusinessOwner(businessId) || isAdmin();
+      }
+      
+      match /tasks/{taskId} {
+        allow read: if isBusinessMember(businessId) || isAdmin();
+        allow create: if isBusinessMember(businessId) && isValidTask(request.resource.data) && request.resource.data.businessId == businessId;
+        allow update: if (isBusinessMember(businessId) && isValidTask(request.resource.data) && request.resource.data.businessId == businessId) || isAdmin();
+        allow delete: if isBusinessMember(businessId) || isAdmin();
+      }
+      
+      match /documents/{documentId} {
+        allow read: if isBusinessMember(businessId) || isAdmin();
+        allow create: if isBusinessMember(businessId) && isValidDocument(request.resource.data) && request.resource.data.businessId == businessId;
+        allow update: if (isBusinessMember(businessId) && isValidDocument(request.resource.data) && request.resource.data.businessId == businessId) || isAdmin();
+        allow delete: if isBusinessMember(businessId) || isAdmin();
+      }
+
+      match /invoices/{invoiceId} {
+        allow read: if isBusinessMember(businessId) || isAdmin();
+        allow create: if isBusinessMember(businessId) && isValidInvoice(request.resource.data) || isAdmin();
+        allow update: if isBusinessMember(businessId) && isValidInvoice(request.resource.data) || isAdmin();
+        allow delete: if isBusinessOwner(businessId) || isAdmin();
+      }
+
+      match /quotations/{quotationId} {
+        allow read: if isBusinessMember(businessId) || isAdmin();
+        allow create: if isBusinessMember(businessId) && isValidInvoice(request.resource.data) || isAdmin();
+        allow update: if isBusinessMember(businessId) && isValidInvoice(request.resource.data) || isAdmin();
+        allow delete: if isBusinessOwner(businessId) || isAdmin();
+      }
+
+      match /settings/{settingId} {
+        allow read: if isBusinessMember(businessId) || isAdmin();
+        allow write: if isBusinessOwner(businessId) && (settingId != 'invoice' || isValidInvoiceSettings(request.resource.data)) || isAdmin();
+      }
+    }
+
+    // Support Ticket Rules
+    match /support_tickets/{ticketId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && isValidSupportTicket(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin()) && isValidSupportTicket(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Test Connection Rule
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
