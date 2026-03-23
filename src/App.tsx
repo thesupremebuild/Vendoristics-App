@@ -18,7 +18,7 @@ import { LogIn, ShieldCheck, Zap, Globe, Smartphone, AlertCircle } from 'lucide-
 import { isAfter } from 'date-fns';
 
 const AppContent: React.FC = () => {
-  const { user, profile, loading, login, activeBusiness } = useAuth();
+  const { user, profile, loading, login, activeBusiness, isGuest, skipLogin } = useAuth();
   const { activeTab, setActiveTab } = useNavigation();
 
   if (loading) {
@@ -32,7 +32,7 @@ const AppContent: React.FC = () => {
     );
   }
 
-  if (!user) {
+  if (!user && !isGuest) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
         {/* Left Side - Hero */}
@@ -99,10 +99,17 @@ const AppContent: React.FC = () => {
             
             <button 
               onClick={login}
-              className="w-full flex items-center justify-center gap-4 bg-white hover:bg-slate-50 text-slate-900 border-2 border-slate-100 py-4 rounded-2xl font-bold transition-all hover:shadow-lg active:scale-95"
+              className="w-full flex items-center justify-center gap-4 bg-white hover:bg-slate-50 text-slate-900 border-2 border-slate-100 py-4 rounded-2xl font-bold transition-all hover:shadow-lg active:scale-95 mb-4"
             >
               <img src="https://www.google.com/favicon.ico" alt="Google" className="w-6 h-6" />
               Continue with Google
+            </button>
+
+            <button 
+              onClick={skipLogin}
+              className="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-slate-900 py-2 rounded-xl text-sm font-semibold transition-all"
+            >
+              Skip for now (Guest Mode)
             </button>
             
             <div className="mt-10 pt-10 border-t border-slate-50">

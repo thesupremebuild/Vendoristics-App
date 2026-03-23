@@ -33,6 +33,8 @@ interface AuthContextType {
   updateSubscription: (status: 'active') => Promise<void>;
   login: () => Promise<void>;
   logout: () => Promise<void>;
+  isGuest: boolean;
+  skipLogin: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,6 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
 
   useEffect(() => {
     testConnection();
@@ -174,10 +177,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleLogout = async () => {
     try {
-      await logout();
+      if (isGuest) {
+        setIsGuest(false);
+        setProfile(null);
+        setBusinesses([]);
+      } else {
+        await logout();
+      }
     } catch (error) {
       console.error("Logout failed", error);
     }
+  };
+
+  const skipLogin = () => {
+    setIsGuest(true);
+    setProfile({
+      uid: 'guest_uid',
+      email: 'guest@example.com',
+      displayName: 'Guest User',
+      role: 'owner',
+      businessId: 'biz_guest'
+    });
+    setBusinesses([{
+      id: 'biz_guest',
+      name: 'Guest Business',
+      ownerId: 'guest_uid',
+      subscriptionStatus: 'trial',
+      trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    }]);
+    setLoading(false);
   };
 
   const activeBusiness = businesses.find(b => b.id === profile?.businessId) || null;
@@ -194,7 +222,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createBusiness,
       updateSubscription,
       login, 
-      logout: handleLogout 
+      logout: handleLogout,
+      isGuest,
+      skipLogin
     }}>
       {children}
     </AuthContext.Provider>
